@@ -1,0 +1,11 @@
+Please enter session type:
+Standard session selected.
+Please enter account holder name:
+Welcome John Doe.
+Please enter account number:
+Please enter bill company:
+Please enter amount:
+Bill payment accepted.
+Transaction recorded.
+Session ended.
+Transaction file written successfully.

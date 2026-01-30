@@ -1,0 +1,8 @@
+login
+standard
+John Doe
+paybill
+12345
+EC
+150.00
+logout

@@ -1,0 +1,7 @@
+Please enter session type:
+Standard session selected.
+Please enter account holder name:
+Welcome John Doe.
+Session ended.
+Transaction file written successfully.
+Error: You must log in before performing any transactions.

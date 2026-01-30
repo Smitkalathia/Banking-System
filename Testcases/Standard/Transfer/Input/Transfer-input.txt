@@ -1,0 +1,8 @@
+login
+standard
+John Doe
+transfer
+12345
+67890
+300.00
+logout
