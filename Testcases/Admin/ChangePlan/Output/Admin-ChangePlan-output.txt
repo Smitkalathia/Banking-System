@@ -1,0 +1,9 @@
+Please enter session type:
+Admin session selected.
+System ready to accept privileged transactions.
+Please enter account holder name:
+Please enter account number:
+Account plan changed successfully.
+Transaction recorded.
+Session ended.
+Transaction file written successfully.

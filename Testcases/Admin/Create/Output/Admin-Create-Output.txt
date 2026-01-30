@@ -1,0 +1,9 @@
+Please enter session type:
+Admin session selected.
+System ready to accept privileged transactions.
+Please enter account holder name:
+Please enter initial balance:
+Account created successfully.
+Transaction recorded.
+Session ended.
+Transaction file written successfully.
