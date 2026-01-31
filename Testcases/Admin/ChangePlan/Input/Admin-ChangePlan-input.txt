@@ -1,6 +1,0 @@
-login
-admin
-changeplan
-Alice Smith
-12345
-logout

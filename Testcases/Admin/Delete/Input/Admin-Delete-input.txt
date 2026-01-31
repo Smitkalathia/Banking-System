@@ -1,6 +1,0 @@
-login
-admin
-delete
-Alice Smith
-12345
-logout

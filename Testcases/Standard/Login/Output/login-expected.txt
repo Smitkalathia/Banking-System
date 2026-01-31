@@ -1,7 +1,0 @@
-Please enter session type:
-Standard session selected.
-Please enter account holder name:
-Welcome John Doe.
-System ready to accept transactions.
-Session ended.
-Transaction file written successfully.

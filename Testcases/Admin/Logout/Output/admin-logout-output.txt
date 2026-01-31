@@ -1,5 +1,0 @@
-Please enter session type:
-Admin session selected.
-System ready to accept privileged transactions.
-Session ended.
-Transaction file written successfully.

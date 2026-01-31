@@ -1,6 +1,0 @@
-login
-admin
-create
-Alice Smith
-500.00
-logout
