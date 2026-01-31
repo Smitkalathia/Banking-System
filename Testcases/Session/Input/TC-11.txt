@@ -1,0 +1,7 @@
+login
+admin
+Admin
+create
+Alice Smith
+500.00
+logout

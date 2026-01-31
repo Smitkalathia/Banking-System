@@ -1,0 +1,7 @@
+login
+standard
+John Doe
+paybill
+ScamCorp
+50.00
+logout

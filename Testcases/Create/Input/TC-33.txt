@@ -1,0 +1,7 @@
+login
+standard
+John Doe
+create
+Bob Smith
+200.00
+logout

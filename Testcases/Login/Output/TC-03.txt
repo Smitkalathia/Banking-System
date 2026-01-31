@@ -1,0 +1,4 @@
+Login accepted: admin session
+User Admin logged in
+Logout accepted
+Session ended

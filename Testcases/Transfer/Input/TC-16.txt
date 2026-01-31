@@ -1,0 +1,8 @@
+login
+standard
+John Doe
+transfer
+John Doe
+Jane Doe
+-10.00
+logout

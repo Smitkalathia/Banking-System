@@ -1,0 +1,6 @@
+login
+standard
+John Doe
+withdraw
+50.00
+logout

@@ -1,0 +1,8 @@
+login
+standard
+John Doe
+transfer
+Ghost User
+Jane Doe
+50.00
+logout

@@ -1,0 +1,4 @@
+Login accepted: standard session
+User John Doe logged in
+Logout accepted
+Session ended

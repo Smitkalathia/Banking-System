@@ -1,0 +1,9 @@
+login
+admin
+Admin
+create
+Temp User
+100.00
+deposit
+50.00
+logout

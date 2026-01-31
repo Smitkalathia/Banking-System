@@ -1,0 +1,5 @@
+Login accepted: standard session
+User John Doe logged in
+ERROR: Session transfer limit exceeded
+Logout accepted
+Session ended

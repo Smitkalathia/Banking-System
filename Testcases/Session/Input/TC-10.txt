@@ -1,0 +1,7 @@
+login
+standard
+John Doe
+create
+Alice Smith
+500.00
+logout

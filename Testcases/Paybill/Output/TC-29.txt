@@ -1,0 +1,5 @@
+Login accepted: standard session
+User John Doe logged in
+ERROR: Insufficient funds
+Logout accepted
+Session ended

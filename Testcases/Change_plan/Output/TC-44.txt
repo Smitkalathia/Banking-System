@@ -1,0 +1,5 @@
+Login accepted: admin session
+User Admin logged in
+ERROR: Account not found
+Logout accepted
+Session ended

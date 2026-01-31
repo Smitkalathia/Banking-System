@@ -1,0 +1,6 @@
+login
+admin
+Admin
+delete
+Alice Smith
+logout
