@@ -1,15 +1,8 @@
-// File: phase2/src/Messages.java
-/**
- * Central catalog of all user-visible console messages.
- *
- * Policy:
- * - The Front End must only print lines that appear in this file (or "User <name> logged in").
- * - This stabilizes output for automated requirements tests.
- */
+//  catalog of all user-visible console messages.
 public final class Messages {
     private Messages() {}
 
-    // Session / login
+    // session / login
     public static final String LOGIN_STANDARD_OK = "Login accepted: standard session";
     public static final String LOGIN_ADMIN_OK = "Login accepted: admin session";
     public static final String LOGOUT_OK = "Logout accepted";
@@ -21,19 +14,19 @@ public final class Messages {
     public static final String ERR_INVALID_ACCOUNT_HOLDER = "ERROR: Invalid account holder name";
     public static final String ERR_PRIVILEGED_NOT_PERMITTED = "ERROR: Privileged transaction not permitted";
 
-    // Acceptance lines
+    // acceptance lines
     public static final String WITHDRAWAL_OK = "Withdrawal accepted";
     public static final String TRANSFER_OK = "Transfer accepted";
     public static final String DEPOSIT_OK = "Deposit accepted";
     public static final String PAYBILL_OK = "Bill payment accepted";
 
-    // Admin success lines
+    // admin success lines
     public static final String CREATE_OK = "Account created successfully";
     public static final String DELETE_OK = "Account deleted successfully";
     public static final String DISABLE_OK = "Account disabled successfully";
     public static final String CHANGEPLAN_OK = "Account plan changed successfully";
 
-    // Account / validation errors
+    // account / validation errors
     public static final String ERR_ACCOUNT_DOES_NOT_EXIST = "ERROR: Account does not exist";
     public static final String ERR_ACCOUNT_DISABLED = "ERROR: Account is disabled";
     public static final String ERR_ACCOUNT_NOT_FOUND = "ERROR: Account not found";
@@ -55,7 +48,7 @@ public final class Messages {
     public static final String ERR_TRANSFER_LIMIT = "ERROR: Session transfer limit exceeded";
     public static final String ERR_PAYMENT_LIMIT = "ERROR: Session payment limit exceeded";
 
-    // Create validation
+    // create validation
     public static final String ERR_NAME_TOO_LONG = "ERROR: Account holder name too long";
     public static final String ERR_INITIAL_BAL_LIMIT = "ERROR: Initial balance exceeds limit";
 }

@@ -1,25 +1,25 @@
-// File: phase2/src/TransactionRecorder.java
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/**
- * Writes the daily transaction file on logout.
- *
- * Phase 2 note:
- * - You requested to not focus on transaction file formatting right now.
- * - This class still creates/overwrites the file to satisfy the CLI contract.
- */
+// handles writing the daily transaction file (.atf)
+// for phase 2, we are not focusing on formatting the file yet
+// it simply creates or overwrites the file on logout
+
 public final class TransactionRecorder {
-    private final Path out;
+
+    private final Path out; // path to the output .atf file
 
     public TransactionRecorder(Path out) {
         this.out = out;
     }
 
-    /** Writes/overwrites the daily transaction file on logout (prototype output). */
+    // called when logout happens
+    // currently just creates/clears the file (prototype behavior)
     public void writeOnLogout() {
         try {
             Files.writeString(out, "");
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+            // prototype: no detailed error handling yet
+        }
     }
 }

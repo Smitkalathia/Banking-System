@@ -1,94 +1,98 @@
-// File: phase2/src/AccountsRepository.java
+// this loads and manages all bank accounts from data/currentaccounts.txt
+// accounts are stored in memory using a map (account number -> Account)
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 
-/**
- * Loads and provides access to bank accounts.
- *
- * Input format (fixed-width, 37 chars/line):
- * NNNNN_aaaaaaaaaaaaaaaaaaaa_S_pppppppp
- *
- * This repository is used by the Front End to validate accounts and simulate balance updates in-memory.
- */
 public final class AccountsRepository {
+
+    // stores accounts by account number
     private final Map<String, Account> byNumber = new HashMap<>();
 
-    /**
-     * Loads the accounts file into memory.
-     * - Lines shorter than 37 chars are ignored.
-     * - Stops reading at END_OF_FILE record.
-     * - Does not print debug output (tests compare stdout).
-     */
+    // loads the accounts file into memory
+    // ignores short lines and stops at END_OF_FILE
+    // does not print anything (for test comparison)
     public void load(Path path) {
         byNumber.clear();
+
         try {
             for (String line : Files.readAllLines(path)) {
                 if (line == null) continue;
                 if (line.length() < 37) continue;
 
-                String acct = line.substring(0, 5);
-                String name = line.substring(6, 26).trim();
-                String statusChar = line.substring(27, 28);
-                String balStr = line.substring(29, 37).trim();
+                String acct = line.substring(0, 5);            // account number
+                String name = line.substring(6, 26).trim();    // owner name
+                String statusChar = line.substring(27, 28);    // A or D
+                String balStr = line.substring(29, 37).trim(); // balance
 
+                // stop reading when we hit end marker
                 if ("END_OF_FILE".equals(name)) break;
 
-                Account.Status st = "D".equalsIgnoreCase(statusChar) ? Account.Status.D : Account.Status.A;
+                Account.Status st =
+                        "D".equalsIgnoreCase(statusChar)
+                        ? Account.Status.D
+                        : Account.Status.A;
+
                 Long cents = Money.parseToCents(balStr);
                 if (cents == null) cents = 0L;
 
-                // Prototype: plan not stored in file; default SP.
-                byNumber.put(acct, new Account(acct, name, st, Account.Plan.SP, cents));
+                // prototype: plan not stored in file, default to student plan
+                byNumber.put(acct,
+                        new Account(acct, name, st, Account.Plan.SP, cents));
             }
         } catch (Exception ignored) {
-            // No stdout output here; errors are surfaced via behaviour in tests.
+            // no stdout here (tests compare exact output)
         }
     }
 
-    /** Returns the account by number, or null if missing. */
+    // returns the account by number, or null if it does not exist
     public Account getByNumber(String acctNum) {
         if (acctNum == null) return null;
         return byNumber.get(acctNum.trim());
     }
 
-    /** Returns true if any account exists with this owner name (case-insensitive). */
+    // returns true if an owner exists (case-insensitive check)
     public boolean ownerExists(String owner) {
         if (owner == null) return false;
+
         String o = owner.trim();
         if (o.isEmpty()) return false;
+
         for (Account a : byNumber.values()) {
             if (a.owner.equalsIgnoreCase(o)) return true;
         }
         return false;
     }
 
-    /** Returns true if the account number exists in the system. */
+    // returns true if the account number exists
     public boolean existsAccountNumber(String acctNum) {
         if (acctNum == null) return false;
         return byNumber.containsKey(acctNum.trim());
     }
 
-    /** Adds a new account (admin create). */
+    // adds a new account (used for admin create)
     public void add(Account a) {
         byNumber.put(a.number, a);
     }
 
-    /** Removes an account (admin delete). */
+    // removes an account (used for admin delete)
     public void remove(String acctNum) {
         if (acctNum == null) return;
         byNumber.remove(acctNum.trim());
     }
 
-    /** Generates a next available 5-digit account number (prototype behaviour). */
+    // generates the next available 5-digit account number (prototype logic)
     public String nextAccountNumber() {
         int max = 0;
+
         for (String k : byNumber.keySet()) {
             try {
                 max = Math.max(max, Integer.parseInt(k));
             } catch (Exception ignored) {}
         }
+
         return String.format("%05d", max + 1);
     }
 }

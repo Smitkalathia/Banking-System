@@ -1,46 +1,45 @@
 // File: phase2/src/TransactionProcessor.java
-/**
- * Main transaction engine for the Front End.
- *
- * Responsibilities:
- * - Reads a transaction stream from stdin (one code per line + required field lines)
- * - Enforces session rules (login required, logout ends session, admin privileges)
- * - Validates constraints and prints ONLY approved Messages lines
- * - Updates balances in-memory for the duration of the run (prototype)
- */
+
+// main engine of the front end
+// it reads a transaction code per line from stdin and runs the matching handler
+// it also enforces session rules (must login first, logout ends session, admin-only commands)
+
 public final class TransactionProcessor {
     private final ConsoleIO io;
     private final AccountsRepository repo;
     private final TransactionRecorder recorder;
     private final SessionContext session = new SessionContext();
 
-    // Standard mode caps (cents)
+    // standard mode per-session caps (in cents)
     private static final long WITHDRAW_CAP_CENTS = 500_00L;
     private static final long TRANSFER_CAP_CENTS = 1000_00L;
     private static final long PAYMENT_CAP_CENTS  = 2000_00L;
 
+    // constructor: injects our input/output wrapper, account repo, and transaction file writer
     public TransactionProcessor(ConsoleIO io, AccountsRepository repo, TransactionRecorder recorder) {
         this.io = io;
         this.repo = repo;
         this.recorder = recorder;
     }
 
-    /** Runs the main read-dispatch loop until EOF on stdin. */
+    // main loop: keeps reading transaction codes until EOF
     public void run() {
         while (true) {
             String code = readLine();
-            if (code == null) return;
+            if (code == null) return; // EOF
 
             code = code.trim();
             if (code.isEmpty()) continue;
 
+            // if not logged in, only "login" is allowed
+            // we still consume extra lines so the input stream doesn't get out of sync
             if (!session.loggedIn && !code.equalsIgnoreCase("login")) {
                 skipFieldsForTransactionWhenNotLoggedIn(code);
                 io.println(Messages.ERR_NO_SESSION);
                 continue;
             }
 
-
+            // login/logout are handled up here (simpler flow)
             if (code.equalsIgnoreCase("login")) {
                 handleLogin();
                 continue;
@@ -50,6 +49,8 @@ public final class TransactionProcessor {
                 continue;
             }
 
+            // dispatch to the correct handler
+            // note: we avoid printing "unknown transaction code" because tests may not allow it
             switch (code.toLowerCase()) {
                 case "withdrawal" -> handleWithdrawal();
                 case "transfer" -> handleTransfer();
@@ -60,14 +61,16 @@ public final class TransactionProcessor {
                 case "disable" -> handleDisable();
                 case "changeplan" -> handleChangePlan();
                 default -> {
-                    // Policy: do not print "unknown transaction code" (not in approved output list).
-                    // Before-login handling is already covered above.
+                    // unknown transaction code: do nothing (policy for now)
                 }
             }
         }
     }
 
-    /** Handles login flow: reads session type and required fields; sets session state. */
+    // login flow:
+    // reads session type ("standard" or "admin")
+    // standard -> reads owner name, validates it exists
+    // admin -> reads admin name (or defaults)
     private void handleLogin() {
         if (session.loggedIn) {
             io.println(Messages.ERR_SESSION_ACTIVE);
@@ -76,11 +79,12 @@ public final class TransactionProcessor {
 
         String typeLine = readLine();
         if (typeLine == null) return;
+
         String type = typeLine.trim().toLowerCase();
 
+        // invalid session type (some tests may include an extra line after this)
         if (!type.equals("standard") && !type.equals("admin")) {
-            // Many tests include an extra line after a bad session type; consume one line to avoid drift.
-            readLine();
+            readLine(); // consume one line to avoid input drift
             io.println(Messages.ERR_INVALID_SESSION_TYPE);
             return;
         }
@@ -88,8 +92,10 @@ public final class TransactionProcessor {
         if (type.equals("standard")) {
             String owner = readLine();
             if (owner == null) return;
+
             owner = owner.trim();
 
+            // standard login must match an owner in the accounts file
             if (!repo.ownerExists(owner)) {
                 io.println(Messages.ERR_INVALID_ACCOUNT_HOLDER);
                 return;
@@ -104,9 +110,10 @@ public final class TransactionProcessor {
             return;
         }
 
-        // admin login
+        // admin login (prototype: any name allowed)
         String adminName = readLine();
         if (adminName == null) return;
+
         adminName = adminName.trim();
         if (adminName.isEmpty()) adminName = "Admin";
 
@@ -118,19 +125,22 @@ public final class TransactionProcessor {
         io.println("User " + adminName + " logged in");
     }
 
-    /** Handles logout: writes transaction file, prints logout + session ended, and clears session state. */
+    // logout ends the session and writes the transaction file (prototype output)
     private void handleLogout() {
         if (!session.loggedIn) {
             io.println(Messages.ERR_NO_SESSION);
             return;
         }
+
         recorder.writeOnLogout();
         io.println(Messages.LOGOUT_OK);
         io.println(Messages.SESSION_ENDED);
+
         session.reset();
     }
 
-    /** Withdrawal: validates ownership, disabled status, same-session rules, session cap, and funds. */
+    // withdrawal:
+    // checks ownership, account status, same-session rules, per-session cap, and available funds
     private void handleWithdrawal() {
         String owner = currentOwner();
         if (owner == null) return;
@@ -140,12 +150,14 @@ public final class TransactionProcessor {
         if (acctNum == null || amtLine == null) return;
 
         acctNum = acctNum.trim();
+
         Long cents = Money.parseToCents(amtLine);
         if (cents == null || cents <= 0) {
             io.println(Messages.ERR_WITHDRAW_AMOUNT);
             return;
         }
 
+        // standard cap check
         if (session.mode == SessionContext.Mode.STANDARD &&
                 session.withdrawalTotalCents + cents > WITHDRAW_CAP_CENTS) {
             io.println(Messages.ERR_WITHDRAW_LIMIT);
@@ -157,20 +169,26 @@ public final class TransactionProcessor {
             io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
             return;
         }
+
         if (a.status == Account.Status.D) {
             io.println(Messages.ERR_ACCOUNT_DISABLED);
             return;
         }
+
         if (!a.owner.equalsIgnoreCase(owner)) {
             io.println(Messages.ERR_ACCOUNT_NOT_OWNED);
             return;
         }
+
+        // created accounts are not usable in the same session
         if (session.createdAccounts.contains(a.number)) {
             io.println(Messages.ERR_UNAVAILABLE_SAME_SESSION);
             return;
         }
 
+        // deposits are tracked as "pending" and not usable in this session
         long pending = session.pendingDepositsCents.getOrDefault(a.number, 0L);
+
         if (cents > a.balanceCents) {
             if (cents <= a.balanceCents + pending) io.println(Messages.ERR_FUNDS_UNAVAILABLE_SAME_SESSION);
             else io.println(Messages.ERR_INSUFFICIENT);
@@ -183,7 +201,8 @@ public final class TransactionProcessor {
         io.println(Messages.WITHDRAWAL_OK);
     }
 
-    /** Transfer: validates ownership of source, existence of destination, caps, and funds. */
+    // transfer:
+    // checks ownership of source, destination exists, account status, caps, and funds
     private void handleTransfer() {
         String owner = currentOwner();
         if (owner == null) return;
@@ -202,6 +221,7 @@ public final class TransactionProcessor {
             return;
         }
 
+        // standard cap check
         if (session.mode == SessionContext.Mode.STANDARD &&
                 session.transferTotalCents + cents > TRANSFER_CAP_CENTS) {
             io.println(Messages.ERR_TRANSFER_LIMIT);
@@ -213,25 +233,30 @@ public final class TransactionProcessor {
             io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
             return;
         }
+
         Account dst = repo.getByNumber(toAcct);
         if (dst == null) {
             io.println(Messages.ERR_DEST_NOT_FOUND);
             return;
         }
+
         if (src.status == Account.Status.D || dst.status == Account.Status.D) {
             io.println(Messages.ERR_ACCOUNT_DISABLED);
             return;
         }
+
         if (!src.owner.equalsIgnoreCase(owner)) {
             io.println(Messages.ERR_SRC_NOT_OWNED);
             return;
         }
+
         if (session.createdAccounts.contains(src.number) || session.createdAccounts.contains(dst.number)) {
             io.println(Messages.ERR_UNAVAILABLE_SAME_SESSION);
             return;
         }
 
         long pending = session.pendingDepositsCents.getOrDefault(src.number, 0L);
+
         if (cents > src.balanceCents) {
             if (cents <= src.balanceCents + pending) io.println(Messages.ERR_FUNDS_UNAVAILABLE_SAME_SESSION);
             else io.println(Messages.ERR_INSUFFICIENT);
@@ -245,7 +270,8 @@ public final class TransactionProcessor {
         io.println(Messages.TRANSFER_OK);
     }
 
-    /** Deposit: records funds as pending for the session (not available until next session). */
+    // deposit:
+    // deposits are "pending" in this session and not usable until next session
     private void handleDeposit() {
         String owner = currentOwner();
         if (owner == null) return;
@@ -255,6 +281,7 @@ public final class TransactionProcessor {
         if (acctNum == null || amtLine == null) return;
 
         acctNum = acctNum.trim();
+
         Long cents = Money.parseToCents(amtLine);
         if (cents == null || cents <= 0) {
             io.println(Messages.ERR_DEPOSIT_AMOUNT);
@@ -266,26 +293,32 @@ public final class TransactionProcessor {
             io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
             return;
         }
+
         if (a.status == Account.Status.D) {
             io.println(Messages.ERR_ACCOUNT_DISABLED);
             return;
         }
+
         if (!a.owner.equalsIgnoreCase(owner)) {
             io.println(Messages.ERR_ACCOUNT_NOT_OWNED);
             return;
         }
+
         if (session.createdAccounts.contains(a.number)) {
             io.println(Messages.ERR_UNAVAILABLE_SAME_SESSION);
             return;
         }
 
-        session.pendingDepositsCents.put(a.number,
-                session.pendingDepositsCents.getOrDefault(a.number, 0L) + cents);
+        session.pendingDepositsCents.put(
+                a.number,
+                session.pendingDepositsCents.getOrDefault(a.number, 0L) + cents
+        );
 
         io.println(Messages.DEPOSIT_OK);
     }
 
-    /** Paybill: validates payee, caps, ownership, and funds. */
+    // paybill:
+    // checks payee is valid, caps, ownership, and funds
     private void handlePaybill() {
         String owner = currentOwner();
         if (owner == null) return;
@@ -309,6 +342,7 @@ public final class TransactionProcessor {
             return;
         }
 
+        // standard cap check
         if (session.mode == SessionContext.Mode.STANDARD &&
                 session.paymentTotalCents + cents > PAYMENT_CAP_CENTS) {
             io.println(Messages.ERR_PAYMENT_LIMIT);
@@ -320,20 +354,24 @@ public final class TransactionProcessor {
             io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
             return;
         }
+
         if (a.status == Account.Status.D) {
             io.println(Messages.ERR_ACCOUNT_DISABLED);
             return;
         }
+
         if (!a.owner.equalsIgnoreCase(owner)) {
             io.println(Messages.ERR_ACCOUNT_NOT_OWNED);
             return;
         }
+
         if (session.createdAccounts.contains(a.number)) {
             io.println(Messages.ERR_UNAVAILABLE_SAME_SESSION);
             return;
         }
 
         long pending = session.pendingDepositsCents.getOrDefault(a.number, 0L);
+
         if (cents > a.balanceCents) {
             if (cents <= a.balanceCents + pending) io.println(Messages.ERR_FUNDS_UNAVAILABLE_SAME_SESSION);
             else io.println(Messages.ERR_INSUFFICIENT);
@@ -346,7 +384,7 @@ public final class TransactionProcessor {
         io.println(Messages.PAYBILL_OK);
     }
 
-    /** Admin create: validates name length and initial balance limit; prevents using created accounts in same session. */
+    // create/delete/disable/changeplan are privileged (admin-only)
     private void handleCreate() {
         if (!requireAdmin()) return;
 
@@ -354,17 +392,18 @@ public final class TransactionProcessor {
         if (owner == null) return;
         owner = owner.trim();
 
+        // owner name max length is 20
         if (owner.length() > 20) {
             io.println(Messages.ERR_NAME_TOO_LONG);
-            // consume likely remaining lines to keep input aligned
             readLine();
             readLine();
             return;
         }
 
-        // Accept either:
-        // - owner, acctNum, initialBalance
-        // - owner, initialBalance (prototype generates acctNum)
+        // accepts either:
+        //   owner, acctNum, balance
+        // or:
+        //   owner, balance (acctNum auto-generated)
         String line2 = readLine();
         if (line2 == null) return;
         line2 = line2.trim();
@@ -394,12 +433,13 @@ public final class TransactionProcessor {
         }
 
         repo.add(new Account(acctNum, owner, Account.Status.A, Account.Plan.SP, cents));
+
+        // created accounts are not usable until next session
         session.createdAccounts.add(acctNum);
 
         io.println(Messages.CREATE_OK);
     }
 
-    /** Admin delete: validates account exists and belongs to the specified owner. */
     private void handleDelete() {
         if (!requireAdmin()) return;
 
@@ -420,7 +460,6 @@ public final class TransactionProcessor {
         io.println(Messages.DELETE_OK);
     }
 
-    /** Admin disable: sets account status to disabled (D). */
     private void handleDisable() {
         if (!requireAdmin()) return;
 
@@ -441,7 +480,6 @@ public final class TransactionProcessor {
         io.println(Messages.DISABLE_OK);
     }
 
-    /** Admin changeplan: sets plan to NP (non-student). */
     private void handleChangePlan() {
         if (!requireAdmin()) return;
 
@@ -462,38 +500,40 @@ public final class TransactionProcessor {
         io.println(Messages.CHANGEPLAN_OK);
     }
 
-    /** Ensures the session is admin; prints the correct error line otherwise. */
+    // returns false + prints the right error if the current session is not admin
     private boolean requireAdmin() {
         if (!session.loggedIn) {
             io.println(Messages.ERR_NO_SESSION);
             return false;
         }
+
         if (session.mode != SessionContext.Mode.ADMIN) {
             io.println(Messages.ERR_PRIVILEGED_NOT_PERMITTED);
             return false;
         }
+
         return true;
     }
 
-    /**
-     * Returns the owner name for the current transaction:
-     * - Standard mode: current logged in user
-     * - Admin mode: reads the owner name from stdin (one line)
-     */
+    // returns the owner name for the current transaction
+    // standard mode -> logged in user
+    // admin mode -> reads the owner name from stdin first
     private String currentOwner() {
         if (!session.loggedIn) {
             io.println(Messages.ERR_NO_SESSION);
             return null;
         }
+
         if (session.mode == SessionContext.Mode.ADMIN) {
             String o = readLine();
             if (o == null) return null;
             return o.trim();
         }
+
         return session.userName;
     }
 
-    /** Valid payees accepted by the spec (short codes or full names). */
+    // allowed payees (short codes and full names)
     private boolean isValidPayee(String payee) {
         if (payee.equalsIgnoreCase("EC")) return true;
         if (payee.equalsIgnoreCase("CQ")) return true;
@@ -505,44 +545,40 @@ public final class TransactionProcessor {
 
         return false;
     }
-    /**
- * When not logged in, we still need to consume the correct number of lines for a
- * known transaction so its "fields" do not get interpreted as new transaction codes.
- * This is critical for TC-05 and TC-09.
- */
-private void skipFieldsForTransactionWhenNotLoggedIn(String codeRaw) {
-    String code = codeRaw == null ? "" : codeRaw.trim().toLowerCase();
 
-    switch (code) {
-        case "withdrawal" -> skipLines(2); // acct, amount
-        case "deposit" -> skipLines(2);    // acct, amount
-        case "transfer" -> skipLines(3);   // from, to, amount
-        case "paybill" -> skipLines(3);    // acct, payee, amount
+    // when not logged in, consume the right number of "field lines"
+    // this prevents those fields from being treated as new transaction codes
+    private void skipFieldsForTransactionWhenNotLoggedIn(String codeRaw) {
+        String code = codeRaw == null ? "" : codeRaw.trim().toLowerCase();
 
-        // privileged transactions (even though not logged in, tests might include them)
-        case "create" -> skipLines(2);     // owner, (acct or balance) [prototype assumes at least 2]
-        case "delete" -> skipLines(2);     // owner, acct
-        case "disable" -> skipLines(2);    // owner, acct
-        case "changeplan" -> skipLines(2); // owner, acct
+        switch (code) {
+            case "withdrawal" -> skipLines(2); // acct, amount
+            case "deposit" -> skipLines(2);    // acct, amount
+            case "transfer" -> skipLines(3);   // from, to, amount
+            case "paybill" -> skipLines(3);    // acct, payee, amount
 
-        // logout before login: no fields to consume
-        case "logout" -> { /* nothing */ }
+            // privileged transactions (tests may include them before login)
+            case "create" -> skipLines(2);     // owner, (acct or balance)
+            case "delete" -> skipLines(2);     // owner, acct
+            case "disable" -> skipLines(2);    // owner, acct
+            case "changeplan" -> skipLines(2); // owner, acct
 
-        default -> {
-            // unknown word: treat it as a single bad transaction code, consume nothing
+            case "logout" -> { /* no extra lines */ }
+
+            default -> {
+                // unknown code: consume nothing
+            }
         }
     }
-}
 
-/** Consumes n lines from stdin (if available). */
-private void skipLines(int n) {
-    for (int i = 0; i < n; i++) {
-        if (readLine() == null) return;
+    // consumes n lines from stdin (stops early if EOF)
+    private void skipLines(int n) {
+        for (int i = 0; i < n; i++) {
+            if (readLine() == null) return;
+        }
     }
-}
 
-
-    /** Reads one raw line from stdin. */
+    // wrapper for reading one line from stdin
     private String readLine() {
         return io.readLine();
     }

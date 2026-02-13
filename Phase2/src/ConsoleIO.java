@@ -1,23 +1,24 @@
-// File: phase2/src/ConsoleIO.java
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintStream;
 
-/**
- * Small wrapper around stdin/stdout to keep I/O testable and isolated.
- * - Reads lines from stdin
- * - Prints lines to stdout
- */
-public final class ConsoleIO {
-    private final BufferedReader in;
-    private final PrintStream out;
+// this is a small wrapper around stdin and stdout
+// it keeps input/output separate from the main logic
+// makes it easier to test and keeps TransactionProcessor cleaner
 
+public final class ConsoleIO {
+
+    private final BufferedReader in;   // reads from standard input
+    private final PrintStream out;     // writes to standard output
+
+    // constructor that wraps stdin and stdout
     public ConsoleIO(BufferedReader in, PrintStream out) {
         this.in = in;
         this.out = out;
     }
 
-    /** Reads a single line from stdin; returns null on EOF or I/O failure. */
+    // reads one line from input
+    // returns null if end-of-file or if something goes wrong
     public String readLine() {
         try {
             return in.readLine();
@@ -26,7 +27,7 @@ public final class ConsoleIO {
         }
     }
 
-    /** Prints exactly one line to stdout. */
+    // prints one line to output
     public void println(String s) {
         out.println(s);
     }
