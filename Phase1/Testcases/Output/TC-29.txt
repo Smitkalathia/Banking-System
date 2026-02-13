@@ -1,0 +1,3 @@
+Login accepted: standard session
+User John Doe logged in
+ERROR: Invalid payee

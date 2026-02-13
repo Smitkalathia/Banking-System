@@ -1,0 +1,5 @@
+Login accepted: admin session
+User Admin logged in
+ERROR: Initial balance exceeds limit
+Logout accepted
+Session ended

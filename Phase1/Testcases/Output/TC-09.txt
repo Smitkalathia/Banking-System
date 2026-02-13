@@ -1,0 +1,6 @@
+Login accepted: standard session
+User John Doe logged in
+Logout accepted
+Session ended
+ERROR: No active session
+ERROR: No active session
