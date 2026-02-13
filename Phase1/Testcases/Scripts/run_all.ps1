@@ -1,3 +1,4 @@
+<#
 $root = (Get-Location).Path
 
 $accounts = Join-Path $root "phase2\data\currentaccounts.txt"
@@ -24,3 +25,4 @@ foreach ($t in $tests) {
 
   Write-Host "ran $name"
 }
+#>

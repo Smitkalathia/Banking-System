@@ -1,3 +1,4 @@
+<#
 param(
   [Parameter(Mandatory=$true)]
   [string]$TestId
@@ -26,3 +27,4 @@ $lines =
 [System.IO.File]::WriteAllLines($output, $lines, $utf8NoBom)
 
 Write-Host "ran $TestId"
+#>

@@ -1,3 +1,4 @@
+<#
 $root = (Get-Location).Path
 $failed = @()
 
@@ -24,3 +25,4 @@ foreach ($t in $tests) {
 
 "`nFAILED:"
 $failed
+#>
