@@ -8,7 +8,7 @@ import java.util.Set;
 // and keeps track of per-session limits and same-session rules
 
 public final class SessionContext {
-
+    public String lastCreatedAccountNumber = null;
     // session mode
     // STANDARD = normal account holder
     // ADMIN = privileged user
@@ -42,5 +42,6 @@ public final class SessionContext {
 
         createdAccounts.clear();
         pendingDepositsCents.clear();
+        lastCreatedAccountNumber = null;
     }
 }

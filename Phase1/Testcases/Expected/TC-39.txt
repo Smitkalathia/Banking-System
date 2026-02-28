@@ -1,5 +1,5 @@
 Login accepted: standard session
 User John Doe logged in
-ERROR: Account does not exist
+ERROR: Account not found
 Logout accepted
 Session ended

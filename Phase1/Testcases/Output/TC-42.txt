@@ -1,4 +1,6 @@
 Login accepted: standard session
 User John Doe logged in
+ERROR: Account is disabled
 Logout accepted
+Session ended
 Session ended

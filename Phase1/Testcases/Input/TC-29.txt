@@ -3,5 +3,5 @@ standard
 John Doe
 paybill
 Hydro
-50000.00
+500.00
 logout

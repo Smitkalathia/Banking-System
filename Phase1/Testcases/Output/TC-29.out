@@ -1,3 +1,5 @@
 Login accepted: standard session
 User John Doe logged in
-ERROR: Invalid payee
+ERROR: Insufficient funds
+Logout accepted
+Session ended

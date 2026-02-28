@@ -2,5 +2,5 @@ login
 admin
 Admin
 delete
-Alice Smith
+Jane Smith
 logout

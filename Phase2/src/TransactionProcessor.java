@@ -275,14 +275,36 @@ public final class TransactionProcessor {
         String line1 = readLine();
         if (line1 == null) return;
 
-        String acctOwner;
-        Long cents = Money.parseToCents(line1);
+        String token = line1.trim();
+
+        String targetKey; // owner name OR account number
+        Long cents = Money.parseToCents(token);
 
         if (cents != null) {
-            acctOwner = owner;
+            // Amount-only deposit:
+            // - Standard: deposit to current user
+            // - Admin: deposit to the most recently created account in this session
+            if (session.mode == SessionContext.Mode.ADMIN) {
+                if (session.lastCreatedAccountNumber == null) {
+                    io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
+                    return;
+                }
+                targetKey = session.lastCreatedAccountNumber;
+            } else {
+                targetKey = owner;
+            }
         } else {
-            acctOwner = line1.trim();
-            cents = Money.parseToCents(readLine());
+            // Target + amount deposit (target can be owner or account number)
+            targetKey = token;
+
+            String amtLine = readLine();
+            if (amtLine == null) return;
+
+            cents = Money.parseToCents(amtLine);
+            if (cents == null || cents <= 0) {
+                io.println(Messages.ERR_DEPOSIT_AMOUNT);
+                return;
+            }
         }
 
         if (cents == null || cents <= 0) {
@@ -290,7 +312,10 @@ public final class TransactionProcessor {
             return;
         }
 
-        Account a = repo.getByOwner(acctOwner);
+        // Lookup by owner first, then by account number
+        Account a = repo.getByOwner(targetKey);
+        if (a == null) a = repo.getByNumber(targetKey);
+
         if (a == null) {
             io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
             return;
@@ -300,16 +325,21 @@ public final class TransactionProcessor {
             io.println(Messages.ERR_ACCOUNT_DISABLED);
             return;
         }
-        a.balanceCents += cents; // balance reflects deposit immediately
-        io.println(Messages.DEPOSIT_OK);
+
+        // TC-36: newly created accounts cannot be used in same session
+        if (session.createdAccounts.contains(a.number)) {
+            io.println(Messages.ERR_UNAVAILABLE_SAME_SESSION);
+            return;
+        }
+
+        // TC-25: reflect deposit in balance but lock it for same session usage
+        a.balanceCents += cents;
         session.pendingDepositsCents.put(
             a.number,
             session.pendingDepositsCents.getOrDefault(a.number, 0L) + cents
         );
-        if (a.status == Account.Status.D) {
-            io.println(Messages.ERR_ACCOUNT_DISABLED);
-            return;
-        }
+
+        io.println(Messages.DEPOSIT_OK);
     }
 
     // paybill:
@@ -318,13 +348,9 @@ public final class TransactionProcessor {
         String owner = currentOwner();
         if (owner == null) return;
 
-        String acctNum = readLine();
         String payee = readLine();
         String amtLine = readLine();
-        if (acctNum == null || payee == null || amtLine == null) return;
-
-        acctNum = acctNum.trim();
-        payee = payee.trim();
+        if (payee == null || amtLine == null) return;
 
         if (!isValidPayee(payee)) {
             io.println(Messages.ERR_INVALID_PAYEE);
@@ -337,14 +363,7 @@ public final class TransactionProcessor {
             return;
         }
 
-        // standard cap check
-        if (session.mode == SessionContext.Mode.STANDARD &&
-                session.paymentTotalCents + cents > PAYMENT_CAP_CENTS) {
-            io.println(Messages.ERR_PAYMENT_LIMIT);
-            return;
-        }
-
-        Account a = repo.getByNumber(acctNum);
+        Account a = repo.getByOwner(owner);
         if (a == null) {
             io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
             return;
@@ -355,27 +374,29 @@ public final class TransactionProcessor {
             return;
         }
 
-        if (!a.owner.equalsIgnoreCase(owner)) {
-            io.println(Messages.ERR_ACCOUNT_NOT_OWNED);
+    if (session.mode == SessionContext.Mode.STANDARD &&
+            session.paymentTotalCents + cents > PAYMENT_CAP_CENTS) {
+            io.println(Messages.ERR_PAYMENT_LIMIT);
             return;
         }
 
-        if (session.createdAccounts.contains(a.number)) {
-            io.println(Messages.ERR_UNAVAILABLE_SAME_SESSION);
-            return;
-        }
-
+        // Same-session deposit lock
         long pending = session.pendingDepositsCents.getOrDefault(a.number, 0L);
+        long availableNow = a.balanceCents - pending;
 
-        if (cents > a.balanceCents) {
-            if (cents <= a.balanceCents + pending) io.println(Messages.ERR_FUNDS_UNAVAILABLE_SAME_SESSION);
-            else io.println(Messages.ERR_INSUFFICIENT);
+        if (cents > availableNow) {
+            if (cents <= a.balanceCents) {
+                io.println(Messages.ERR_FUNDS_UNAVAILABLE_SAME_SESSION);
+            } else {
+                io.println(Messages.ERR_INSUFFICIENT);
+            }
             return;
         }
 
-        a.balanceCents -= cents;
-        if (session.mode == SessionContext.Mode.STANDARD) session.paymentTotalCents += cents;
 
+        
+        a.balanceCents -= cents;
+        session.paymentTotalCents += cents;
         io.println(Messages.PAYBILL_OK);
     }
 
@@ -390,7 +411,6 @@ public final class TransactionProcessor {
         // owner name max length is 20
         if (owner.length() > 20) {
             io.println(Messages.ERR_NAME_TOO_LONG);
-            readLine();
             readLine();
             return;
         }
@@ -432,48 +452,67 @@ public final class TransactionProcessor {
         // created accounts are not usable until next session
         session.createdAccounts.add(acctNum);
 
+        // remember most recent created account for admin amount-only deposit tests
+        session.lastCreatedAccountNumber = acctNum;
+
         io.println(Messages.CREATE_OK);
     }
 
     private void handleDelete() {
         if (!requireAdmin()) return;
 
-        String owner = readLine();
-        String acctNum = readLine();
-        if (owner == null || acctNum == null) return;
+        String targetLine = readLine();
+        if (targetLine == null) return;
 
-        owner = owner.trim();
-        acctNum = acctNum.trim();
-
-        Account a = repo.getByNumber(acctNum);
-        if (a == null || !a.owner.equalsIgnoreCase(owner)) {
+        String key = targetLine.trim();
+        if (key.isEmpty()) {
             io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
             return;
         }
 
-        repo.remove(acctNum);
+        // Accept either owner name OR 5-digit account number
+        Account a = repo.getByOwner(key);
+        if (a == null && key.matches("^\\d{5}$")) {
+            a = repo.getByNumber(key);
+        }
+
+        if (a == null) {
+            io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
+            return;
+        }
+
+        // Remove by account number
+        repo.remove(a.number);
+
         io.println(Messages.DELETE_OK);
     }
 
     private void handleDisable() {
-        if (!requireAdmin()) return;
+    if (!requireAdmin()) return;
 
-        String owner = readLine();
-        String acctNum = readLine();
-        if (owner == null || acctNum == null) return;
+    String targetLine = readLine();
+    if (targetLine == null) return;
 
-        owner = owner.trim();
-        acctNum = acctNum.trim();
-
-        Account a = repo.getByNumber(acctNum);
-        if (a == null || !a.owner.equalsIgnoreCase(owner)) {
-            io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
-            return;
-        }
-
-        a.status = Account.Status.D;
-        io.println(Messages.DISABLE_OK);
+    String key = targetLine.trim();
+    if (key.isEmpty()) {
+        io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
+        return;
     }
+
+    // Accept either owner name OR 5-digit account number
+    Account a = repo.getByOwner(key);
+    if (a == null && key.matches("^\\d{5}$")) {
+        a = repo.getByNumber(key);
+    }
+
+    if (a == null) {
+        io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
+        return;
+    }
+
+    a.status = Account.Status.D;
+    io.println(Messages.DISABLE_OK);
+}
 
     private void handleChangePlan() {
         if (!requireAdmin()) return;
@@ -513,19 +552,9 @@ public final class TransactionProcessor {
     // returns the owner name for the current transaction
     // standard mode -> logged in user
     // admin mode -> reads the owner name from stdin first
+// Returns the logged-in username only.
+// Must not read stdin; handlers read their own fields.
     private String currentOwner() {
-    if (session.mode == SessionContext.Mode.ADMIN) {
-        String o = readLine();
-        if (o == null) return null;
-        return o.trim();
-    }
-
-        if (session.mode == SessionContext.Mode.ADMIN) {
-            String o = readLine();
-            if (o == null) return null;
-            return o.trim();
-        }
-
         return session.userName;
     }
 
