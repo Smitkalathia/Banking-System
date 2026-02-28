@@ -517,20 +517,33 @@ public final class TransactionProcessor {
     private void handleChangePlan() {
         if (!requireAdmin()) return;
 
-        String owner = readLine();
-        String acctNum = readLine();
-        if (owner == null || acctNum == null) return;
+        String targetLine = readLine();
+        if (targetLine == null) return;
 
-        owner = owner.trim();
-        acctNum = acctNum.trim();
-
-        Account a = repo.getByNumber(acctNum);
-        if (a == null || !a.owner.equalsIgnoreCase(owner)) {
+        String key = targetLine.trim();
+        if (key.isEmpty()) {
             io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
             return;
         }
 
-        a.plan = Account.Plan.NP;
+        // Accept either owner name OR 5-digit account number
+        Account a = repo.getByOwner(key);
+        if (a == null && key.matches("^\\d{5}$")) {
+            a = repo.getByNumber(key);
+        }
+
+        if (a == null) {
+            io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
+            return;
+        }
+
+        // Toggle plan (SP <-> NP)
+        if (a.plan == Account.Plan.SP) {
+            a.plan = Account.Plan.NP;
+        } else {
+            a.plan = Account.Plan.SP;
+        }
+
         io.println(Messages.CHANGEPLAN_OK);
     }
 
