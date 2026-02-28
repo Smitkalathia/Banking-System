@@ -95,4 +95,19 @@ public final class AccountsRepository {
 
         return String.format("%05d", max + 1);
     }
+    // gets owner type
+    // Lookup account by owner name (case-insensitive)
+    public Account getByOwner(String owner) {
+        if (owner == null) return null;
+
+        String o = owner.trim();
+        if (o.isEmpty()) return null;
+
+        for (Account a : byNumber.values()) {
+            if (a.owner.equalsIgnoreCase(o)) {
+                return a;
+            }
+        }
+        return null;
+    }
 }

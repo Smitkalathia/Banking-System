@@ -3,6 +3,6 @@ standard
 John Doe
 transfer
 John Doe
-Jane Doe
-50000.00
+Jane Smith
+500.00
 logout

@@ -2,7 +2,7 @@ login
 standard
 John Doe
 transfer
-Ghost User
-Jane Doe
+Jane Smith
+John Doe
 50.00
 logout

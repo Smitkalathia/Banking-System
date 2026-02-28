@@ -1,28 +1,51 @@
-<#
+# run_all.ps1
+# Runs all Phase 1 acceptance tests against the Front End (Phase 2/3).
+# Produces for each test:
+#   - phase1\Testcases\output\<TC-xx>.out  (terminal output)
+#   - phase1\Testcases\output\<TC-xx>.atf  (daily transaction file)
+
+$ErrorActionPreference = "Stop"
 $root = (Get-Location).Path
 
 $accounts = Join-Path $root "phase2\data\currentaccounts.txt"
+$inputDir = Join-Path $root "phase1\Testcases\input"
+$outDir   = Join-Path $root "phase1\Testcases\output"
+
 if (!(Test-Path $accounts)) { throw "Missing accounts file: $accounts" }
+if (!(Test-Path $inputDir)) { throw "Missing input directory: $inputDir" }
 
-$tests = Get-ChildItem -Path "phase1\Testcases\input" -Filter "TC-*.txt" | Sort-Object Name
-if ($tests.Count -eq 0) { throw "No tests found in phase1\Testcases\input" }
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
+$tests = Get-ChildItem -Path $inputDir -Filter "TC-*.txt" | Sort-Object Name
+if ($tests.Count -eq 0) { throw "No tests found in $inputDir" }
+
+# UTF-8 without BOM (prevents strange BOM characters)
 $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
 foreach ($t in $tests) {
-  $name   = $t.BaseName
-  $input  = $t.FullName
-  $output = Join-Path $root "phase1\Testcases\output\$name.txt"
-  $trans  = Join-Path $root "phase1\Testcases\output\$name.atf"
+  $id     = $t.BaseName
+  $inFile = $t.FullName
 
-  New-Item -ItemType Directory -Force -Path (Split-Path $output) | Out-Null
+  $outFile = Join-Path $outDir "$id.out"
+  $atfFile = Join-Path $outDir "$id.atf"
 
-  $lines =
-    Get-Content $input |
-    java -cp phase2\bin AtmApp $accounts $trans
+  if ([string]::IsNullOrWhiteSpace($atfFile)) { throw "Internal error: atfFile path is null for $id" }
 
-  [System.IO.File]::WriteAllLines($output, $lines, $utf8NoBom)
+  # Clean previous outputs (avoids stale results)
+  if (Test-Path $outFile) { Remove-Item $outFile -Force }
+  if (Test-Path $atfFile) { Remove-Item $atfFile -Force }
 
-  Write-Host "ran $name"
+  # Always create the .atf file so it exists even if the program exits early
+  New-Item -ItemType File -Path $atfFile -Force | Out-Null
+
+  Write-Host "running $id ..."
+
+  # Run program: stdin from test file, stdout captured to $lines, .atf written by program
+  $lines = Get-Content -Path $inFile | java -cp phase2\bin AtmApp $accounts $atfFile
+
+  # Always write stdout to file (even if empty)
+  [System.IO.File]::WriteAllLines($outFile, @($lines), $utf8NoBom)
+
+  Write-Host "wrote  $outFile"
+  Write-Host "wrote  $atfFile"
 }
-#>

@@ -9,7 +9,7 @@ public final class TransactionProcessor {
     private final AccountsRepository repo;
     private final TransactionRecorder recorder;
     private final SessionContext session = new SessionContext();
-
+    private boolean sawLogout = false;
     // standard mode per-session caps (in cents)
     private static final long WITHDRAW_CAP_CENTS = 500_00L;
     private static final long TRANSFER_CAP_CENTS = 1000_00L;
@@ -26,16 +26,21 @@ public final class TransactionProcessor {
     public void run() {
         while (true) {
             String code = readLine();
-            if (code == null) return; // EOF
+            if (code == null) {
+                if (sawLogout) {
+                    io.println(Messages.SESSION_ENDED);
+                }
+                return;
+            }
 
             code = code.trim();
             if (code.isEmpty()) continue;
 
             // if not logged in, only "login" is allowed
             // we still consume extra lines so the input stream doesn't get out of sync
-            if (!session.loggedIn && !code.equalsIgnoreCase("login")) {
-                skipFieldsForTransactionWhenNotLoggedIn(code);
+            if (!session.loggedIn && !code.equals("login")) {
                 io.println(Messages.ERR_NO_SESSION);
+                skipFieldsForTransactionWhenNotLoggedIn(code);
                 continue;
             }
 
@@ -51,18 +56,18 @@ public final class TransactionProcessor {
 
             // dispatch to the correct handler
             // note: we avoid printing "unknown transaction code" because tests may not allow it
-            switch (code.toLowerCase()) {
-                case "withdrawal" -> handleWithdrawal();
-                case "transfer" -> handleTransfer();
+            switch (code) {
+                case "login" -> handleLogin();
+                case "logout" -> handleLogout();
+                case "withdraw" -> handleWithdrawal();
                 case "deposit" -> handleDeposit();
+                case "transfer" -> handleTransfer();
                 case "paybill" -> handlePaybill();
                 case "create" -> handleCreate();
                 case "delete" -> handleDelete();
                 case "disable" -> handleDisable();
                 case "changeplan" -> handleChangePlan();
-                default -> {
-                    // unknown transaction code: do nothing (policy for now)
-                }
+                default -> { }
             }
         }
     }
@@ -127,16 +132,10 @@ public final class TransactionProcessor {
 
     // logout ends the session and writes the transaction file (prototype output)
     private void handleLogout() {
-        if (!session.loggedIn) {
-            io.println(Messages.ERR_NO_SESSION);
-            return;
-        }
-
-        recorder.writeOnLogout();
         io.println(Messages.LOGOUT_OK);
-        io.println(Messages.SESSION_ENDED);
-
+        recorder.writeOnLogout();
         session.reset();
+        sawLogout = true;
     }
 
     // withdrawal:
@@ -145,26 +144,25 @@ public final class TransactionProcessor {
         String owner = currentOwner();
         if (owner == null) return;
 
-        String acctNum = readLine();
-        String amtLine = readLine();
-        if (acctNum == null || amtLine == null) return;
+        String line1 = readLine();
+        if (line1 == null) return;
 
-        acctNum = acctNum.trim();
+        String acctOwner;
+        Long cents = Money.parseToCents(line1);
 
-        Long cents = Money.parseToCents(amtLine);
+        if (cents != null) {
+            acctOwner = owner;
+        } else {
+            acctOwner = line1.trim();
+            cents = Money.parseToCents(readLine());
+        }
+
         if (cents == null || cents <= 0) {
             io.println(Messages.ERR_WITHDRAW_AMOUNT);
             return;
         }
 
-        // standard cap check
-        if (session.mode == SessionContext.Mode.STANDARD &&
-                session.withdrawalTotalCents + cents > WITHDRAW_CAP_CENTS) {
-            io.println(Messages.ERR_WITHDRAW_LIMIT);
-            return;
-        }
-
-        Account a = repo.getByNumber(acctNum);
+        Account a = repo.getByOwner(acctOwner);
         if (a == null) {
             io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
             return;
@@ -179,25 +177,30 @@ public final class TransactionProcessor {
             io.println(Messages.ERR_ACCOUNT_NOT_OWNED);
             return;
         }
-
-        // created accounts are not usable in the same session
-        if (session.createdAccounts.contains(a.number)) {
-            io.println(Messages.ERR_UNAVAILABLE_SAME_SESSION);
+        if (session.mode == SessionContext.Mode.STANDARD &&
+            session.withdrawalTotalCents + cents > WITHDRAW_CAP_CENTS) {
+            io.println(Messages.ERR_WITHDRAW_LIMIT);
             return;
         }
 
-        // deposits are tracked as "pending" and not usable in this session
         long pending = session.pendingDepositsCents.getOrDefault(a.number, 0L);
+        long availableNow = a.balanceCents - pending;
 
-        if (cents > a.balanceCents) {
-            if (cents <= a.balanceCents + pending) io.println(Messages.ERR_FUNDS_UNAVAILABLE_SAME_SESSION);
-            else io.println(Messages.ERR_INSUFFICIENT);
+        // If the requested amount is <= balanceCents but > availableNow,
+        // it means the user is trying to use same-session deposited funds.
+        if (cents > availableNow) {
+            if (cents <= a.balanceCents) {
+                io.println(Messages.ERR_FUNDS_UNAVAILABLE_SAME_SESSION);
+            } else {
+                io.println(Messages.ERR_INSUFFICIENT);
+            }
             return;
         }
+
+        
 
         a.balanceCents -= cents;
-        if (session.mode == SessionContext.Mode.STANDARD) session.withdrawalTotalCents += cents;
-
+        session.withdrawalTotalCents += cents;
         io.println(Messages.WITHDRAWAL_OK);
     }
 
@@ -207,41 +210,24 @@ public final class TransactionProcessor {
         String owner = currentOwner();
         if (owner == null) return;
 
-        String fromAcct = readLine();
-        String toAcct = readLine();
-        String amtLine = readLine();
-        if (fromAcct == null || toAcct == null || amtLine == null) return;
-
-        fromAcct = fromAcct.trim();
-        toAcct = toAcct.trim();
+        String srcOwner = readLine();
+        String dstOwner = readLine();
+        String amtLine  = readLine();
+        if (srcOwner == null || dstOwner == null || amtLine == null) return;
 
         Long cents = Money.parseToCents(amtLine);
         if (cents == null || cents <= 0) {
             io.println(Messages.ERR_TRANSFER_AMOUNT);
             return;
         }
+        String srcKey = srcOwner.trim();
 
-        // standard cap check
-        if (session.mode == SessionContext.Mode.STANDARD &&
-                session.transferTotalCents + cents > TRANSFER_CAP_CENTS) {
-            io.println(Messages.ERR_TRANSFER_LIMIT);
-            return;
+        Account src = repo.getByOwner(srcKey);
+        if (src == null) {
+            src = repo.getByNumber(srcKey);
         }
-
-        Account src = repo.getByNumber(fromAcct);
         if (src == null) {
             io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
-            return;
-        }
-
-        Account dst = repo.getByNumber(toAcct);
-        if (dst == null) {
-            io.println(Messages.ERR_DEST_NOT_FOUND);
-            return;
-        }
-
-        if (src.status == Account.Status.D || dst.status == Account.Status.D) {
-            io.println(Messages.ERR_ACCOUNT_DISABLED);
             return;
         }
 
@@ -250,23 +236,33 @@ public final class TransactionProcessor {
             return;
         }
 
-        if (session.createdAccounts.contains(src.number) || session.createdAccounts.contains(dst.number)) {
-            io.println(Messages.ERR_UNAVAILABLE_SAME_SESSION);
+        Account dst = repo.getByOwner(dstOwner.trim());
+        if (dst == null || dst.status == Account.Status.D) {
+            io.println(Messages.ERR_DEST_NOT_FOUND);
             return;
         }
-
+        if (session.mode == SessionContext.Mode.STANDARD &&
+            session.transferTotalCents + cents > TRANSFER_CAP_CENTS) {
+            io.println(Messages.ERR_TRANSFER_LIMIT);
+            return;
+        }
         long pending = session.pendingDepositsCents.getOrDefault(src.number, 0L);
+        long availableNow = src.balanceCents - pending;
 
-        if (cents > src.balanceCents) {
-            if (cents <= src.balanceCents + pending) io.println(Messages.ERR_FUNDS_UNAVAILABLE_SAME_SESSION);
-            else io.println(Messages.ERR_INSUFFICIENT);
+        if (cents > availableNow) {
+            if (cents <= src.balanceCents) {
+                io.println(Messages.ERR_FUNDS_UNAVAILABLE_SAME_SESSION);
+            } else {
+                io.println(Messages.ERR_INSUFFICIENT);
+            }
             return;
         }
+
+        
 
         src.balanceCents -= cents;
         dst.balanceCents += cents;
-        if (session.mode == SessionContext.Mode.STANDARD) session.transferTotalCents += cents;
-
+        session.transferTotalCents += cents;
         io.println(Messages.TRANSFER_OK);
     }
 
@@ -276,19 +272,25 @@ public final class TransactionProcessor {
         String owner = currentOwner();
         if (owner == null) return;
 
-        String acctNum = readLine();
-        String amtLine = readLine();
-        if (acctNum == null || amtLine == null) return;
+        String line1 = readLine();
+        if (line1 == null) return;
 
-        acctNum = acctNum.trim();
+        String acctOwner;
+        Long cents = Money.parseToCents(line1);
 
-        Long cents = Money.parseToCents(amtLine);
+        if (cents != null) {
+            acctOwner = owner;
+        } else {
+            acctOwner = line1.trim();
+            cents = Money.parseToCents(readLine());
+        }
+
         if (cents == null || cents <= 0) {
             io.println(Messages.ERR_DEPOSIT_AMOUNT);
             return;
         }
 
-        Account a = repo.getByNumber(acctNum);
+        Account a = repo.getByOwner(acctOwner);
         if (a == null) {
             io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
             return;
@@ -298,23 +300,16 @@ public final class TransactionProcessor {
             io.println(Messages.ERR_ACCOUNT_DISABLED);
             return;
         }
-
-        if (!a.owner.equalsIgnoreCase(owner)) {
-            io.println(Messages.ERR_ACCOUNT_NOT_OWNED);
-            return;
-        }
-
-        if (session.createdAccounts.contains(a.number)) {
-            io.println(Messages.ERR_UNAVAILABLE_SAME_SESSION);
-            return;
-        }
-
-        session.pendingDepositsCents.put(
-                a.number,
-                session.pendingDepositsCents.getOrDefault(a.number, 0L) + cents
-        );
-
+        a.balanceCents += cents; // balance reflects deposit immediately
         io.println(Messages.DEPOSIT_OK);
+        session.pendingDepositsCents.put(
+            a.number,
+            session.pendingDepositsCents.getOrDefault(a.number, 0L) + cents
+        );
+        if (a.status == Account.Status.D) {
+            io.println(Messages.ERR_ACCOUNT_DISABLED);
+            return;
+        }
     }
 
     // paybill:
@@ -428,7 +423,7 @@ public final class TransactionProcessor {
         }
 
         if (repo.existsAccountNumber(acctNum)) {
-            io.println(Messages.ERR_ACCOUNT_DOES_NOT_EXIST);
+            io.println(Messages.ERR_ACCOUNT_NOT_FOUND);
             return;
         }
 
@@ -519,10 +514,11 @@ public final class TransactionProcessor {
     // standard mode -> logged in user
     // admin mode -> reads the owner name from stdin first
     private String currentOwner() {
-        if (!session.loggedIn) {
-            io.println(Messages.ERR_NO_SESSION);
-            return null;
-        }
+    if (session.mode == SessionContext.Mode.ADMIN) {
+        String o = readLine();
+        if (o == null) return null;
+        return o.trim();
+    }
 
         if (session.mode == SessionContext.Mode.ADMIN) {
             String o = readLine();
@@ -535,39 +531,41 @@ public final class TransactionProcessor {
 
     // allowed payees (short codes and full names)
     private boolean isValidPayee(String payee) {
-        if (payee.equalsIgnoreCase("EC")) return true;
-        if (payee.equalsIgnoreCase("CQ")) return true;
-        if (payee.equalsIgnoreCase("FI")) return true;
+    if (payee == null) return false;
+    String p = payee.trim();
+    if (p.isEmpty()) return false;
 
-        if (payee.equalsIgnoreCase("The Bright Light Electric Company (EC)")) return true;
-        if (payee.equalsIgnoreCase("Credit Card Company Q (CQ)")) return true;
-        if (payee.equalsIgnoreCase("Fast Internet, Inc. (FI)")) return true;
-
-        return false;
-    }
+    return p.equalsIgnoreCase("Hydro")
+        || p.equalsIgnoreCase("Cable")
+        || p.equalsIgnoreCase("Phone");
+}
 
     // when not logged in, consume the right number of "field lines"
     // this prevents those fields from being treated as new transaction codes
-    private void skipFieldsForTransactionWhenNotLoggedIn(String codeRaw) {
-        String code = codeRaw == null ? "" : codeRaw.trim().toLowerCase();
-
+    private void skipFieldsForTransactionWhenNotLoggedIn(String code) {
         switch (code) {
-            case "withdrawal" -> skipLines(2); // acct, amount
-            case "deposit" -> skipLines(2);    // acct, amount
-            case "transfer" -> skipLines(3);   // from, to, amount
-            case "paybill" -> skipLines(3);    // acct, payee, amount
+            case "withdraw":
+            case "deposit":
+                skipLines(1);
+                break;
 
-            // privileged transactions (tests may include them before login)
-            case "create" -> skipLines(2);     // owner, (acct or balance)
-            case "delete" -> skipLines(2);     // owner, acct
-            case "disable" -> skipLines(2);    // owner, acct
-            case "changeplan" -> skipLines(2); // owner, acct
+            case "transfer":
+            case "paybill":
+                skipLines(2);
+                break;
 
-            case "logout" -> { /* no extra lines */ }
+            case "create":
+            case "delete":
+            case "disable":
+            case "changeplan":
+                skipLines(2);
+                break;
 
-            default -> {
-                // unknown code: consume nothing
-            }
+            case "login":
+            case "logout":
+            default:
+                // no extra lines
+                break;
         }
     }
 

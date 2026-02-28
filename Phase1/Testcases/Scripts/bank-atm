@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ACCOUNTS_FILE="${1:?currentaccounts.txt required}"
+TRANSOUT_FILE="${2:?transout.atf required}"
+
+java -cp phase2/bin AtmApp "$ACCOUNTS_FILE" "$TRANSOUT_FILE"
