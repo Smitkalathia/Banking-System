@@ -1,0 +1,1 @@
+To run the code use this in the phase 4 directory : python main.py input/currentaccounts.txt input/transactions.txt output/new_currentaccounts.txt
