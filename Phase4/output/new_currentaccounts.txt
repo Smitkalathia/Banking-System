@@ -1,0 +1,3 @@
+12345John Doe            A00150.000002SP
+54321Jane Smith          A00230.500001SP
+END_OF_FILE
