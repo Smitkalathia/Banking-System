@@ -1,0 +1,9 @@
+=== DAILY RUN day3 ===
+Running session: /mnt/c/Users/kalat/Csci3060/Banking-System/Phase6/sessions/day3/session1.txt
+Back End processing complete.
+Read accounts from: /mnt/c/Users/kalat/Csci3060/Banking-System/Phase6/output/day3/day3_backend_input.txt
+Read transactions from: /mnt/c/Users/kalat/Csci3060/Banking-System/Phase6/output/day3/day3_merged.atf
+Wrote updated accounts to: /mnt/c/Users/kalat/Csci3060/Banking-System/Phase6/output/day3/day3_backend_output.txt
+Merged ATF: /mnt/c/Users/kalat/Csci3060/Banking-System/Phase6/output/day3/day3_merged.atf
+Next day current accounts: /mnt/c/Users/kalat/Csci3060/Banking-System/Phase6/output/day3/day3_currentaccounts_frontend.txt
+=== DAILY COMPLETE ===

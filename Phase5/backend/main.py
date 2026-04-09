@@ -40,6 +40,7 @@ def main():
             "fatal",
             "Usage: python main.py <current_accounts_file> <transaction_file> <output_file>"
         )
+        sys.exit(1)
 
     current_accounts_file = sys.argv[1]
     transaction_file = sys.argv[2]

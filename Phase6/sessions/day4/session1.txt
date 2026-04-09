@@ -1,0 +1,6 @@
+login
+standard
+Jane Smith
+withdraw
+15.00
+logout

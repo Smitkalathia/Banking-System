@@ -1,0 +1,6 @@
+login
+standard
+Jane Smith
+deposit
+25.00
+logout

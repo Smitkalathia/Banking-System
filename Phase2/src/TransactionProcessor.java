@@ -201,6 +201,7 @@ public final class TransactionProcessor {
 
         a.balanceCents -= cents;
         session.withdrawalTotalCents += cents;
+        recorder.recordWithdrawal(a.number, cents);
         io.println(Messages.WITHDRAWAL_OK);
     }
 
@@ -263,6 +264,7 @@ public final class TransactionProcessor {
         src.balanceCents -= cents;
         dst.balanceCents += cents;
         session.transferTotalCents += cents;
+        recorder.recordTransfer(src.number, cents, dst.number);
         io.println(Messages.TRANSFER_OK);
     }
 
@@ -338,6 +340,7 @@ public final class TransactionProcessor {
             a.number,
             session.pendingDepositsCents.getOrDefault(a.number, 0L) + cents
         );
+        recorder.recordDeposit(a.number, cents);
 
         io.println(Messages.DEPOSIT_OK);
     }
@@ -448,7 +451,7 @@ public final class TransactionProcessor {
         }
 
         repo.add(new Account(acctNum, owner, Account.Status.A, Account.Plan.SP, cents));
-
+        recorder.recordCreate(acctNum, owner);
         // created accounts are not usable until next session
         session.createdAccounts.add(acctNum);
 
@@ -483,7 +486,7 @@ public final class TransactionProcessor {
 
         // Remove by account number
         repo.remove(a.number);
-
+        recorder.recordDelete(a.number);
         io.println(Messages.DELETE_OK);
     }
 
@@ -511,6 +514,7 @@ public final class TransactionProcessor {
     }
 
     a.status = Account.Status.D;
+    recorder.recordDisable(a.number);
     io.println(Messages.DISABLE_OK);
 }
 
@@ -543,6 +547,8 @@ public final class TransactionProcessor {
         } else {
             a.plan = Account.Plan.SP;
         }
+
+        recorder.recordChangePlan(a.number, a.plan.name());
 
         io.println(Messages.CHANGEPLAN_OK);
     }

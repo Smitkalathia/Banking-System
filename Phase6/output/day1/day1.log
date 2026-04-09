@@ -1,0 +1,9 @@
+=== DAILY RUN day1 ===
+Running session: Phase6/sessions/day1/session1.txt
+Back End processing complete.
+Read accounts from: Phase6/output/day1/day1_backend_input.txt
+Read transactions from: Phase6/output/day1/day1_merged.atf
+Wrote updated accounts to: Phase6/output/day1/day1_backend_output.txt
+Merged ATF: Phase6/output/day1/day1_merged.atf
+Next day current accounts: Phase6/output/day1/day1_currentaccounts_frontend.txt
+=== DAILY COMPLETE ===

@@ -1,0 +1,8 @@
+login
+standard
+John Doe
+deposit
+50.00
+withdraw
+20.00
+logout

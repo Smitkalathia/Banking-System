@@ -1,0 +1,3 @@
+00001John Doe            A00120.000000SP
+00002Jane Smith          A00510.000001SP
+END_OF_FILE
